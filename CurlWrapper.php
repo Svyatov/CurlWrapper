@@ -57,6 +57,10 @@ class CurlWrapper
      * @var array cURL transfer info
      */
     protected $transferInfo = array();
+    /**
+     * @var string cURL response header data
+     */
+    protected $responseHeaders = '';
 
     /**
      * Initiates the cURL handle
@@ -296,6 +300,34 @@ class CurlWrapper
     }
 
     /**
+     * Gets the response headers from the last transfer
+     *
+     * If $key is given, returns its value. Otherwise, returns an associative array of the response headers
+     *
+     * @param string $key
+     * @throws CurlWrapperException
+     * @return array|string
+     */
+    public function getResponseHeaders($key = null)
+    {
+        if (empty($this->responseHeaders)) {
+            throw new CurlWrapperException('There are no response headers. Did you do the request?');
+        }
+
+        $this->responseHeaders = $this->parseHeaders($this->responseHeaders);
+
+        if ($key === null) {
+            return $this->responseHeaders;
+        }
+
+        if (isset($this->responseHeaders[$key])) {
+            return $this->responseHeaders[$key];
+        }
+
+        throw new CurlWrapperException('There is no such key: '.$key);
+    }
+
+    /**
      * Makes the 'HEAD' request to the $url with an optional $requestParams
      *
      * @param string $url
@@ -518,7 +550,31 @@ class CurlWrapper
             CURLOPT_AUTOREFERER    => true,
             CURLOPT_CONNECTTIMEOUT => 15,
             CURLOPT_TIMEOUT        => 30,
+            CURLOPT_HEADERFUNCTION => array($this, 'headerCallback'),
         );
+    }
+
+    /**
+     * Parses raw HTTP headers to array
+     */
+    private function parseHeaders($raw_headers) {
+        $headers = [];
+        foreach (explode("\n", $raw_headers) as $i => $h) {
+            $h = explode(':', $h, 2);
+            if (isset($h[1])) {
+                $headers[$h[0]] = trim($h[1]);
+            }
+        }
+        return $headers;
+    }
+
+    /**
+     * Callback function for CURLOPT_HEADERFUNCTION option, processing raw headers line-by-line 
+     */
+    private function headerCallback($ch, $header_line)
+    {
+        $this->responseHeaders .= $header_line;
+        return strlen($header_line);
     }
 
     /**
